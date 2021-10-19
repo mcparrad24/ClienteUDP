@@ -6,6 +6,7 @@ import time
 import threading
 import logging
 from datetime import datetime
+import pyshark
 
 #Separador
 SEPARATOR = "SEPARATOR"
@@ -25,6 +26,12 @@ tiempos = []
 #Array vacio con variable que indica si la transmisión fue exitosa o no
 exitos = []
 
+#Array vacio con el número de paquetes enviados
+paquetes = []
+
+#Array vacio con el número de bytes enviados
+bytes = []
+
 #Variable para cerrar conexiones
 fin = False
 
@@ -32,10 +39,9 @@ filenames = []
 filesizes = []
 
 #Puertos e ip
-ip='localhost'
-#Puerto sockets TCP
-puerto=10100
-server_address = (ip, puerto)
+#IP servidor
+ipServ='localhost'
+ipCli='localhost'
 #Puerto sockets UDP
 puerto2=65535
 
@@ -60,7 +66,7 @@ def md5(connection, fname, hashrecibido, i):
     connection.send(mssg)
 
 #Función para crear el log
-def log(filenames, filesizes, exitos, tiempos):
+def log(filenames, filesizes, exitos, tiempos, paquetes, bytes):
     filename = LOG_FILENAME
     logging.basicConfig(filename = filename, encoding='utf-8', level=logging.INFO)
     logging.info('Nombre archivo:' + filenames[0])
@@ -73,19 +79,22 @@ def log(filenames, filesizes, exitos, tiempos):
         else:
             logging.info('Archivo no fue entregado exitosamente')
         logging.info('Tiempo de transferencia archivo cliente ' + str(i+1) + ': '+ str(tiempos[i]) + " milisegundos")
+        logging.info('Total de paquetes transmitidos cliente ' + str(i+1) + ': ' + str(paquetes[i]))
+        logging.info('Total de bytes transmitidos cliente ' + str(i+1) + ': ' + str(bytes[i]))
         i += 1
     return filename
 
 #Función para crear los clientes
 def createSocket(i, num_clientes):
-    sock = socket.create_connection(('localhost', 10000))
+    sock = socket.create_connection((ipServ, 10000))
     conexiones.append(i)
     udpsock= socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udpsock.bind((ip, puerto2-i))
+    time.sleep(1)
+    udpsock.bind((ipCli, puerto2-i))
     while True:
         message = b'Listo para recibir'
         sock.send(message)
-        received, addr = udpsock.recvfrom(BUFFER_SIZE)
+        received = sock.recv(BUFFER_SIZE)
         if('SEPARATOR' in received.decode('ISO-8859-1')):
             filenameF, filesizeF = received.decode('ISO-8859-1').split(SEPARATOR)
             newFilename = 'Cliente'+str(i)+'-Prueba'+str(num_clientes)+'.txt'
@@ -96,6 +105,8 @@ def createSocket(i, num_clientes):
             filesizes.append(filesizeF)
         try:
             start_time = datetime.now()
+            paqs = 0
+            bytes_env = 0
             with open(var, "w") as f:
                 while True:
                     bytes_read, addr = udpsock.recvfrom(BUFFER_SIZE)
@@ -103,10 +114,14 @@ def createSocket(i, num_clientes):
                         end_time = datetime.now()
                         tiempo = end_time - start_time
                         tiempos.append(tiempo)
+                        paquetes.append(paqs)
+                        bytes.append(bytes_env)
                         break
                     f.write(bytes_read.decode('ISO-8859-1'))
-        finally:
+                    paqs += 1
+                    bytes_env += BUFFER_SIZE
             f.close()
+        finally:
             received= sock.recv(BUFFER_SIZE)
             md5(sock,var,received.decode('ISO-8859-1'), i)
             fin = True
@@ -131,6 +146,6 @@ if __name__ == "__main__":
                 fin = True
                 break
         finally:
-            filenameLog = log(filenames, filesizes, exitos, tiempos)
+            filenameLog = log(filenames, filesizes, exitos, tiempos, paquetes, bytes)
             if fin:
                 break
