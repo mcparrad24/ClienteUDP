@@ -1,12 +1,9 @@
-
 import socket
 import os
-import hashlib
 import time
 import threading
 import logging
 from datetime import datetime
-import pyshark
 
 #Separador
 SEPARATOR = "SEPARATOR"
@@ -40,27 +37,20 @@ filesizes = []
 
 #Puertos e ip
 #IP servidor
-ipServ='localhost'
-ipCli='localhost'
+ipServ='0.0.0.0'
+ipCli='0.0.0.0'
 #Puerto sockets UDP
 puerto2=65535
 
-#Función de creación y envío de hash
-def md5(connection, fname, hashrecibido, i):
+#Función que verifica si la transmisión fue exitosa
+def exito(connection, tamEsperado, tamReal):
     mssg = ''
     exito = 0
-    md5 = hashlib.md5()
-    with open(fname, 'rb') as f:
-        while True:
-            data = f.read(BUFFER_SIZE)
-            if not data:
-                break
-            md5.update(data)
-    if (format(md5.hexdigest()) == hashrecibido):
-        mssg = b'Los valores son iguales'
+    if (tamEsperado == tamReal):
+        mssg = b'Transmision exitosa'
         exito = 1
     else:
-        mssg = b'Los valores son diferentes'
+        mssg = b'Transmision fallida'
         exito = 0
     exitos.append(exito)
     connection.send(mssg)
@@ -110,20 +100,20 @@ def createSocket(i, num_clientes):
             with open(var, "w") as f:
                 while True:
                     bytes_read, addr = udpsock.recvfrom(BUFFER_SIZE)
-                    if ('Finaliza transmision' in bytes_read.decode('ISO-8859-1')):
+                    recibido = sock.recv(BUFFER_SIZE)
+                    if ('Finaliza transmision' in recibido.decode('ISO-8859-1')):
                         end_time = datetime.now()
                         tiempo = end_time - start_time
                         tiempos.append(tiempo)
                         paquetes.append(paqs)
                         bytes.append(bytes_env)
+                        exito(sock, filesizeF, bytes_env)
                         break
                     f.write(bytes_read.decode('ISO-8859-1'))
                     paqs += 1
                     bytes_env += BUFFER_SIZE
             f.close()
         finally:
-            received= sock.recv(BUFFER_SIZE)
-            md5(sock,var,received.decode('ISO-8859-1'), i)
             fin = True
             print('closing socket')
             sock.close()
